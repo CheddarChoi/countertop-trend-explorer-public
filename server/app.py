@@ -61,6 +61,17 @@ client = OpenAI(
 )
 tileinfo = pd.read_csv(BASE_PATH + "/tileinfo.csv")
 
+if (
+    not os.path.exists(IMAGE_DIR)
+    or not os.path.exists(IMAGE_DIR + "/generated_kitchen")
+    or not os.path.exists(IMAGE_DIR + "/generated_kitchen/mask_images")
+    or not os.path.exists(IMAGE_DIR + "/generated_slabs")
+):
+    os.makedirs(IMAGE_DIR)
+    os.makedirs(IMAGE_DIR + "/generated_kitchen")
+    os.makedirs(IMAGE_DIR + "/generated_kitchen/mask_images")
+    os.makedirs(IMAGE_DIR + "/generated_slabs")
+
 
 @app.route("/")
 def test():
