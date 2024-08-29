@@ -1,0 +1,5 @@
+# Flask server gitignore
+__pycache__/
+*.pyc
+images/
+generated_slabs/
