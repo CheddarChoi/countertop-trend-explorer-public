@@ -212,12 +212,11 @@ def generate_image():
                 f.write(base64.b64decode(b64))
 
             features = extract_features(image_path.split("/")[-1])
-            is_countertop_exist = is_countertop_exist(image_path.split("/")[-1])
             if (
                 features["cabinet"]["color"]
                 and features["floor"]["color"]
                 and features["cabinet"]["type"]
-                and is_countertop_exist
+                and is_countertop_exist(image_path.split("/")[-1])
             ):
                 break
             else:
