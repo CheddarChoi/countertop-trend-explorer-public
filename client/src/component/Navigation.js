@@ -26,7 +26,10 @@ const navigationItems = [
   {
     title: "Creative Tools",
     icon: GestureIcon,
-    items: [{ text: "Creative Tools", path: "/creative-tools" }],
+    items: [
+      { text: "표면소재 디자인 생성하기", path: "/creative-tools/generate" },
+      { text: "표면소재 디자인 편집하기", path: "/creative-tools/edit" },
+    ],
   },
 ];
 

@@ -154,6 +154,8 @@ def extract_regional_trend(data_dict, regions, input_color=None, input_pattern=N
     )
 
     for region in regions:
+        if region not in data_dict:
+            continue
         for color, color_data in data_dict[region].items():
             for pattern, counts in color_data.items():
                 if color == input_color:

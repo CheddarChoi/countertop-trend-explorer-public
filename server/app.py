@@ -28,7 +28,7 @@ from utils.color_similarity import (
 )
 from inference import pbe
 from utils.get_trenddata import (
-
+    trendingCountsOne,
     trendingCountsThree,
     trendingCountsTotal,
     find_trending_color_pattern,
