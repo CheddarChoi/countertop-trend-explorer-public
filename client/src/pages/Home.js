@@ -44,8 +44,13 @@ const Home = () => {
       items: [
         {
           text: "Creative Tools",
-          path: "/creative-tools",
-          description: "표면소재 디자인을 위한 다양한 도구를 제공합니다. (개발 예정)",
+          path: "/creative-tools/generate",
+          description: "표면소재 디자인 생성 도구",
+        },
+        {
+          text: "Edit Tools",
+          path: "/creative-tools/edit",
+          description: "표면소재 디자인 편집 도구",
         },
       ],
     },
