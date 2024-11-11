@@ -7,7 +7,7 @@ import GenerateByImage from "../../component/GenerateByImage";
 import GenerateByText from "../../component/GenerateByText";
 import GenerativePanel from "../../component/GenerativePanel";
 
-const CreativeTools = () => {
+const GenerateTools = () => {
   const [inputType, setInputType] = useState("");
   const [generating, setGenerating] = useState(false);
 
@@ -93,4 +93,4 @@ const CreativeTools = () => {
   );
 };
 
-export default CreativeTools;
+export default GenerateTools;

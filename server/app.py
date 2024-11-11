@@ -1,11 +1,13 @@
 import sys, os, random
 from utils.config import BASE_PATH, OPENAI_SETTINGS
+import time
 
 os.environ["HF_HOME"] = BASE_PATH + "/cache"
 sys.path.append(BASE_PATH + "/paint_by_example")
 
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+from categories import usRegions
 from utils.model_loading import (
     countertop_model,
     predictor,
@@ -26,10 +28,17 @@ from utils.color_similarity import (
 )
 from inference import pbe
 from utils.get_trenddata import (
-    trendingCountsOne,
+
     trendingCountsThree,
     trendingCountsTotal,
     find_trending_color_pattern,
+)
+from utils.edit_slab import (
+    recentColorPattern,
+    recentRegionData,
+    extract_trend_with_colorpattern,
+    extract_surrounding_trend,
+    extract_regional_trend,
 )
 from PIL import Image, ImageChops
 import cv2, base64
@@ -39,6 +48,7 @@ from openai import OpenAI
 import pandas as pd
 
 IMAGE_DIR = "images"
+EDIT_SLAB_DIR = "images/edit_slab"
 app = Flask(__name__, static_folder=IMAGE_DIR)
 CORS(app)  # Enable CORS for all routes
 
@@ -71,6 +81,11 @@ if (
     os.makedirs(IMAGE_DIR + "/generated_kitchen")
     os.makedirs(IMAGE_DIR + "/generated_kitchen/mask_images")
     os.makedirs(IMAGE_DIR + "/generated_slabs")
+
+if not os.path.exists(EDIT_SLAB_DIR):
+    os.makedirs(EDIT_SLAB_DIR)
+    os.makedirs(EDIT_SLAB_DIR + "/original")
+    os.makedirs(EDIT_SLAB_DIR + "/edited")
 
 
 @app.route("/")
@@ -198,7 +213,7 @@ def generate_image():
         while True:
             response = client.images.generate(
                 model="dall-e-3",
-                prompt="A high-angle realistic photo of a kitchen, showing kitchen countertop, cabinets, and floor. Ensure that the floor and countertop is clearly visible. The kitchen should feature "
+                prompt="A high-angle zoomed-in realistic photo of a kitchen, showing kitchen countertop, cabinets, and floor. The image should clearly show the kitchen countertop, cabinets, and floor. The countertop is clean and spacious. The kitchen should feature "
                 + prompt,
                 n=1,
                 size="1024x1024",
@@ -433,6 +448,294 @@ def recommendation():
             slabs.append(slab)
 
     return jsonify({"features": features, "filename": filename, "slabs": slabs})
+
+
+@app.route("/upload_slab_image", methods=["POST"])
+def upload_slab_image():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part in the request"}), 400
+
+    file = request.files["file"]
+    extension = file.filename.split(".")[-1]
+    filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}.{extension}"
+    image_path = f"{EDIT_SLAB_DIR}/original/{filename}"
+    file.save(image_path)
+
+    return jsonify({"filename": filename})
+
+
+@app.route("/edit_slab", methods=["POST"])
+def edit_slab():
+    filename = request.json.get("filename")
+    image_path = f"{EDIT_SLAB_DIR}/original/{filename}"
+
+    if not os.path.exists(image_path):
+        return jsonify({"error": "Image not found"}), 400
+
+    weight_on_original = request.json.get("weight_on_original") or 0.5  # 0.0 ~ 1.0
+
+    # extract color and pattern from input image
+    image_bgr = cv2.imread(image_path)
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+    image_pil = Image.fromarray(image_rgb)
+
+    extracted_color, _ = color_similarity(
+        image_bgr, None, countertop_tile_images, countertop_candidate_hists
+    )
+    extracted_pattern, _ = predict_image_class(
+        image_pil, None, model, processor, labels
+    )
+
+    print(extracted_color, extracted_pattern)
+
+    # extract top 4 trend data based on color and pattern
+    edit_propmt = request.json.get(
+        "edit_propmt"
+    )  # One of "recentTrend", "surroundings", "region", "manual"
+    if edit_propmt == "manual":
+        # Get color and pattern inputted
+        inputted_info = request.json.get("inputted_info")
+        color = inputted_info["color"]
+        pattern = inputted_info["pattern"]
+
+        # Generate a slab tile image
+        if not os.path.exists(f"{COUNTERTOP_SLAB_TAGED}/{color}-{pattern}"):
+            color_matching_dirs = os.listdir(COUNTERTOP_SLAB_TAGED)
+            color_matching_dirs = [d for d in color_matching_dirs if color in d]
+            pattern_matching_dirs = os.listdir(COUNTERTOP_SLAB_TAGED)
+            pattern_matching_dirs = [d for d in pattern_matching_dirs if pattern in d]
+            tile1_dir = random.choice(color_matching_dirs)
+            tile2_dir = random.choice(pattern_matching_dirs)
+            tile1_path = random.choice(
+                os.listdir(f"{COUNTERTOP_SLAB_TAGED}/{tile1_dir}")
+            )
+            tile1_path = f"{COUNTERTOP_SLAB_TAGED}/{tile1_dir}/" + tile1_path
+            tile2_path = random.choice(
+                os.listdir(f"{COUNTERTOP_SLAB_TAGED}/{tile2_dir}")
+            )
+            tile2_path = f"{COUNTERTOP_SLAB_TAGED}/{tile2_dir}/" + tile2_path
+            # Randomly select one tile among based on color and pattern
+            tile_path = random.choice([tile1_path, tile2_path])
+        else:
+            matching_tiles = os.listdir(f"{COUNTERTOP_SLAB_TAGED}/{color}-{pattern}")
+            if len(matching_tiles) == 1:
+                tile_path = matching_tiles[0]
+            else:
+                tile_path = random.choice(matching_tiles)
+            tile_path = f"{COUNTERTOP_SLAB_TAGED}/{color}-{pattern}/" + tile_path
+        tile_img_by_trend = (
+            Image.open(
+                os.path.join(f"{COUNTERTOP_SLAB_TAGED}/{color}-{pattern}", tile_path)
+            )
+            .convert("RGB")
+            .resize((768, 512))
+        )
+        tile_img_inputted = Image.fromarray(image_rgb)  # convert to PIL image
+        images_texts = ["", tile_img_inputted, tile_img_by_trend]
+        weights = [0, weight_on_original, 1 - weight_on_original]
+        prior_out = slab_generation_pipe_prior.interpolate(images_texts, weights)
+
+        synthesized_slab_image = slab_generation_pipe(
+            **prior_out, height=768, width=768
+        ).images[0]
+        generation_stamp = time.time()
+        synthesized_slab_image.save(
+            EDIT_SLAB_DIR
+            + "/edited/"
+            + filename
+            + "_"
+            + str(generation_stamp)
+            + f"_synthesized.jpg"
+        )
+        return jsonify(
+            {
+                "original_slab": {
+                    "url": EDIT_SLAB_DIR + "/original/" + filename,
+                    "color": extracted_color,
+                    "pattern": extracted_pattern,
+                },
+                "edited_slabs": [
+                    {
+                        "url": EDIT_SLAB_DIR
+                        + "/edited/"
+                        + filename
+                        + "_"
+                        + str(generation_stamp)
+                        + f"_synthesized.jpg",
+                        "color": color,
+                        "pattern": pattern,
+                    },
+                ],
+            }
+        )
+    else:
+        if edit_propmt == "recentTrend":
+            trend_range = request.json.get(
+                "trend_range"
+            )  # One of "1year", "3year", "total"
+
+            color1, color2 = extract_trend_with_colorpattern(
+                recentColorPattern, trend_range, input_pattern=extracted_pattern
+            )
+            pattern1, pattern2 = extract_trend_with_colorpattern(
+                recentColorPattern, trend_range, input_color=extracted_color
+            )
+
+        elif edit_propmt == "surroundings":
+            surrounding = request.json.get("surrounding")
+            # e.g., surrounding = {"cabinetType": "Flat Panel"}
+            # e.g., surrounding = {"cabinetColor": "White"}
+            # e.g., surrounding = {"floorColor": "Brown"}
+            key = list(surrounding.keys())[0]
+            value = surrounding[key]
+            kwargs = {key: value}
+
+            color1, color2 = extract_surrounding_trend(
+                trendingCountsTotal, input_pattern=extracted_pattern, **kwargs
+            )
+            pattern1, pattern2 = extract_surrounding_trend(
+                trendingCountsTotal, input_color=extracted_color, **kwargs
+            )
+
+        elif edit_propmt == "region":
+            region = request.json.get("region")
+            # e.g., region = {"5개 권역": "West"}
+            # e.g., region = {"9개 지역": "Central"}
+            # e.g., region = {"52개 주": "Washington"}
+            key = list(region.keys())[0]
+            value = region[key]
+
+            if key == "52개 주":
+                regions = [value]
+            else:
+                regions = usRegions[key][value]
+
+            color1, color2 = extract_regional_trend(
+                recentRegionData, regions, input_pattern=extracted_pattern
+            )
+            pattern1, pattern2 = extract_regional_trend(
+                recentRegionData, regions, input_color=extracted_color
+            )
+
+        # input_color + pattern1 / pattern2
+        # input_pattern + color1 / color2
+        # TODO: generate tiles
+        timestamps = []
+        for i, (color, pattern) in enumerate(
+            [
+                (color1, extracted_pattern),
+                (color2, extracted_pattern),
+                (extracted_color, pattern1),
+                (extracted_color, pattern2),
+            ]
+        ):
+            if not os.path.exists(f"{COUNTERTOP_SLAB_TAGED}/{color}-{pattern}"):
+                color_matching_dirs = os.listdir(COUNTERTOP_SLAB_TAGED)
+                color_matching_dirs = [d for d in color_matching_dirs if color in d]
+                pattern_matching_dirs = os.listdir(COUNTERTOP_SLAB_TAGED)
+                pattern_matching_dirs = [
+                    d for d in pattern_matching_dirs if pattern in d
+                ]
+                tile1_dir = random.choice(color_matching_dirs)
+                tile2_dir = random.choice(pattern_matching_dirs)
+                tile1_path = random.choice(
+                    os.listdir(f"{COUNTERTOP_SLAB_TAGED}/{tile1_dir}")
+                )
+                tile1_path = f"{COUNTERTOP_SLAB_TAGED}/{tile1_dir}/" + tile1_path
+                tile2_path = random.choice(
+                    os.listdir(f"{COUNTERTOP_SLAB_TAGED}/{tile2_dir}")
+                )
+                tile2_path = f"{COUNTERTOP_SLAB_TAGED}/{tile2_dir}/" + tile2_path
+                # Randomly select one tile among based on color and pattern
+                tile_path = random.choice([tile1_path, tile2_path])
+            else:
+                matching_tiles = os.listdir(
+                    f"{COUNTERTOP_SLAB_TAGED}/{color}-{pattern}"
+                )
+                if len(matching_tiles) == 1:
+                    tile_path = matching_tiles[0]
+                else:
+                    tile_path = random.choice(matching_tiles)
+                tile_path = f"{COUNTERTOP_SLAB_TAGED}/{color}-{pattern}/" + tile_path
+            tile_img_by_trend = (
+                Image.open(
+                    os.path.join(
+                        f"{COUNTERTOP_SLAB_TAGED}/{color}-{pattern}", tile_path
+                    )
+                )
+                .convert("RGB")
+                .resize((768, 512))
+            )
+            tile_img_inputted = Image.fromarray(image_rgb)  # convert to PIL image
+            images_texts = ["", tile_img_inputted, tile_img_by_trend]
+            weights = [0, weight_on_original, 1 - weight_on_original]
+
+            prior_out = slab_generation_pipe_prior.interpolate(images_texts, weights)
+
+            synthesized_slab_image = slab_generation_pipe(
+                **prior_out, height=768, width=768
+            ).images[0]
+            generation_stamp = time.time()
+            timestamps.append(str(generation_stamp))
+            synthesized_slab_image.save(
+                EDIT_SLAB_DIR
+                + "/edited/"
+                + filename
+                + "_"
+                + str(generation_stamp)
+                + f"_synthesized_{i}.jpg"
+            )
+        return jsonify(
+            {
+                "original_slab": {
+                    "url": EDIT_SLAB_DIR + "/original/" + filename,
+                    "color": extracted_color,
+                    "pattern": extracted_pattern,
+                },
+                "edited_slabs": [
+                    {
+                        "url": EDIT_SLAB_DIR
+                        + "/edited/"
+                        + filename
+                        + "_"
+                        + timestamps[0]
+                        + f"_synthesized_0.jpg",
+                        "color": color1,
+                        "pattern": extracted_pattern,
+                    },
+                    {
+                        "url": EDIT_SLAB_DIR
+                        + "/edited/"
+                        + filename
+                        + "_"
+                        + timestamps[1]
+                        + f"_synthesized_1.jpg",
+                        "color": color2,
+                        "pattern": extracted_pattern,
+                    },
+                    {
+                        "url": EDIT_SLAB_DIR
+                        + "/edited/"
+                        + filename
+                        + "_"
+                        + timestamps[2]
+                        + f"_synthesized_2.jpg",
+                        "color": extracted_color,
+                        "pattern": pattern1,
+                    },
+                    {
+                        "url": EDIT_SLAB_DIR
+                        + "/edited/"
+                        + filename
+                        + "_"
+                        + timestamps[3]
+                        + f"_synthesized_3.jpg",
+                        "color": extracted_color,
+                        "pattern": pattern2,
+                    },
+                ],
+            }
+        )
 
 
 @app.route("/analyze_image", methods=["POST"])

@@ -1,5 +1,6 @@
 import React from "react";
 import { Route, Routes, Outlet, Link } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import { Box, ThemeProvider, createTheme } from "@mui/material";
 import Navigation from "./component/Navigation";
 import Home from "./pages/Home";
@@ -8,10 +9,10 @@ import ColorPatternBased from "./pages/TrendAnalysis/ColorPatternBased";
 import SurroundingElementsBased from "./pages/TrendAnalysis/SurroundingElementsBased";
 import Popularity from "./pages/TrendAnalysis/Popularity";
 import RegionTrends from "./pages/TrendAnalysis/RegionTrend";
-import CreativeTools from "./pages/CreativeTools/CreativeTools";
+import GenerateTools from "./pages/CreativeTools/GenerateTools";
+import EditTools from "./pages/CreativeTools/EditTools";
 
 import "./App.css";
-import { useDispatch } from "react-redux";
 
 function Layout() {
   const theme = createTheme({
@@ -120,7 +121,8 @@ function App() {
         />
         <Route path="trend-analysis/popularity" element={<Popularity />} />
         <Route path="trend-analysis/region" element={<RegionTrends />} />
-        <Route path="creative-tools" element={<CreativeTools />} />
+        <Route path="creative-tools/generate" element={<GenerateTools />} />
+        <Route path="creative-tools/edit" element={<EditTools />} />
         <Route path="initialize" element={<Initialize />} />
         <Route path="*" element={<NoMatch />} />
       </Route>
