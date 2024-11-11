@@ -1,5 +1,15 @@
 export const years = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022];
 
+export const countertop_color = [
+  "White",
+  "Beige",
+  "Brown",
+  "Dark Brown",
+  "Gray",
+  "Dark Gray",
+  "Black",
+];
+
 export const countertop_pattern = [
   "Calacatta",
   "Concrete",
@@ -41,7 +51,7 @@ export const cabinet_color_mapping = {
   "Dark Brown": "#59402A",
   "Light Gray": "#BFBFBF",
   "Dark Gray": "#89888C",
-  "Red": "#8c0303",
+  Red: "#8c0303",
   Green: "#899c87",
 };
 export const cabinet_type_mapping = {

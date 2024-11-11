@@ -17,27 +17,87 @@ import {
   FormControl,
   Select,
   MenuItem,
+  Box,
 } from "@mui/material";
 
 import RegionChart from "../../charts/RegionChart";
 import { db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
 
-import {
-  usRegions,
-  regionCategory,
-} from "../../data/categories";
+import { usRegions, regionCategory } from "../../data/categories";
 
-const RegionTrends = () => {
-  const [inputRegionCategory, setInputRegionCategory] = useState("");
-  const [inputArea, setInputArea] = useState("");
+export const RegionInput = ({
+  inputRegionCategory,
+  setInputRegionCategory,
+  inputArea,
+  setInputArea,
+  style,
+}) => {
   const [patterns, setPatterns] = useState([]);
-  const [data, setData] = useState([]);
-  const [rawData, setRawData] = useState([]);
+
+  useEffect(() => {
+    if (inputRegionCategory) {
+      if (inputRegionCategory === "5개 권역" || inputRegionCategory === "9개 지역") {
+        setPatterns(Object.keys(usRegions[inputRegionCategory]));
+      } else if (inputRegionCategory === "52개 주") {
+        setPatterns(usRegions["52개 주"]);
+      }
+    } else {
+      setPatterns([]);
+    }
+  }, [inputRegionCategory, inputArea]);
+
   const handleRegionCategoryChange = (e) => {
     setInputRegionCategory(e.target.value);
     setInputArea(""); // Reset the second FormControl
   };
+
+  return (
+    <Box style={{ display: "flex", gap: "16px", width: "100%", ...style }}>
+      <FormControl size="small" sx={{ minWidth: 120 }}>
+        <InputLabel id="input-regionCategory">지역 구분</InputLabel>
+        <Select
+          labelId="input-regionCategory"
+          id="input-regionCategory-select"
+          value={inputRegionCategory}
+          label="RegionCategory"
+          onChange={handleRegionCategoryChange}
+        >
+          {regionCategory.map((region, index) => (
+            <MenuItem key={index} value={region}>
+              {region}
+            </MenuItem>
+          ))}
+          <MenuItem value="">Clear Selection</MenuItem>
+        </Select>
+      </FormControl>
+      <FormControl size="small" sx={{ minWidth: 120 }}>
+        <InputLabel id="input-pattern">선택</InputLabel>
+        <Select
+          labelId="input-pattern"
+          id="input-pattern-select"
+          value={inputArea}
+          label="pattern"
+          onChange={(e) => setInputArea(e.target.value)}
+        >
+          {patterns.map((pattern, index) => (
+            <MenuItem key={index} value={pattern}>
+              {pattern}
+            </MenuItem>
+          ))}
+          <MenuItem value="">Clear Selection</MenuItem>
+        </Select>
+      </FormControl>
+    </Box>
+  );
+};
+
+const RegionTrends = () => {
+  const [inputRegionCategory, setInputRegionCategory] = useState("");
+  const [inputArea, setInputArea] = useState("");
+
+  const [data, setData] = useState([]);
+  const [rawData, setRawData] = useState([]);
 
   const [open, setOpen] = useState(false);
   const [selectedData, setSelectedData] = useState(null);
@@ -54,7 +114,7 @@ const RegionTrends = () => {
   // Firestore 데이터 가져오기
   useEffect(() => {
     const fetchData = async () => {
-      const summaryDocRef = doc(db, "summaries", "areaColorPatternCounts");
+      const summaryDocRef = doc(db, "summary", "areaColorPatternCounts");
       const summaryDocSnap = await getDoc(summaryDocRef);
 
       if (summaryDocSnap.exists()) {
@@ -64,21 +124,10 @@ const RegionTrends = () => {
       }
     };
 
-    fetchData(); 
+    fetchData();
   }, []);
-  
+
   useEffect(() => {
-    // Set patterns based on inputRegionCategory
-    if (inputRegionCategory) {
-      if (inputRegionCategory === "5개 권역" || inputRegionCategory === "9개 지역") {
-        setPatterns(Object.keys(usRegions[inputRegionCategory]));
-      } else if (inputRegionCategory === "52개 주") {
-        setPatterns(usRegions["52개 주"]);
-      }
-    } else {
-      setPatterns([]);
-    }
-  
     if (inputRegionCategory && inputArea) {
       let filteredStates = [];
       if (inputRegionCategory === "5개 권역" || inputRegionCategory === "9개 지역") {
@@ -86,10 +135,10 @@ const RegionTrends = () => {
       } else if (inputRegionCategory === "52개 주") {
         filteredStates = [inputArea];
       }
-  
+
       const colorPatternCounts = {};
       let totalFilteredDataCount = 0;
-  
+
       filteredStates.forEach((state) => {
         if (rawData[state]) {
           const colors = rawData[state];
@@ -109,7 +158,7 @@ const RegionTrends = () => {
       });
 
       const calculatedData = [];
-  
+
       // Calculate the percentage of each color-pattern combination
       Object.entries(colorPatternCounts).forEach(([color, patterns]) => {
         Object.entries(patterns).forEach(([pattern, count]) => {
@@ -122,7 +171,7 @@ const RegionTrends = () => {
           });
         });
       });
-  
+
       // Sort by percentage and then assign ranks
       calculatedData.sort((a, b) => b.percentage - a.percentage);
       const rankedData = calculatedData.slice(0, 10).map((item, index) => ({
@@ -134,7 +183,7 @@ const RegionTrends = () => {
       setData([]);
     }
   }, [inputRegionCategory, inputArea, rawData]);
-  
+
   return (
     <div>
       <Typography variant="h4">지역별 트렌드</Typography>
@@ -154,40 +203,12 @@ const RegionTrends = () => {
           }}
         >
           <Typography variant="h5">Trend by</Typography>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel id="input-regionCategory">지역 구분</InputLabel>
-            <Select
-              labelId="input-regionCategory"
-              id="input-regionCategory-select"
-              value={inputRegionCategory}
-              label="RegionCategory"
-              onChange={handleRegionCategoryChange}
-            >
-              {regionCategory.map((region, index) => (
-                <MenuItem key={index} value={region}>
-                  {region}
-                </MenuItem>
-              ))}
-              <MenuItem value="">Clear Selection</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel id="input-pattern">선택</InputLabel>
-            <Select
-              labelId="input-pattern"
-              id="input-pattern-select"
-              value={inputArea}
-              label="pattern"
-              onChange={(e) => setInputArea(e.target.value)}
-            >
-              {patterns.map((pattern, index) => (
-                <MenuItem key={index} value={pattern}>
-                  {pattern}
-                </MenuItem>
-              ))}
-              <MenuItem value="">Clear Selection</MenuItem>
-            </Select>
-          </FormControl>
+          <RegionInput
+            inputRegionCategory={inputRegionCategory}
+            setInputRegionCategory={setInputRegionCategory}
+            inputArea={inputArea}
+            setInputArea={setInputArea}
+          />
         </div>
       </div>
       <div style={{ marginBottom: "32px" }}></div>

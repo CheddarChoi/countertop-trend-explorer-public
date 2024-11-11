@@ -1,13 +1,15 @@
 import React, { useState } from "react";
 import { Button, Typography, styled } from "@mui/material";
 
-import InputLabel from "@mui/material/InputLabel";
-import MenuItem from "@mui/material/MenuItem";
-import FormControl from "@mui/material/FormControl";
-import Select from "@mui/material/Select";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 
-import { countertop_pattern, countertop_color_mapping } from "../../data/categories";
+import { InputLabel, FormControl, Select, MenuItem, Box } from "@mui/material";
+
+import {
+  countertop_color,
+  countertop_pattern,
+  countertop_color_mapping,
+} from "../../data/categories";
 import ColorPatternDashboard from "../../component/ColorPatternDashboard";
 import { analyzeImage } from "../../api/server";
 import ServerSettingDialog from "../../component/ServerSettingDialog";
@@ -23,6 +25,55 @@ const VisuallyHiddenInput = styled("input")({
   whiteSpace: "nowrap",
   width: 1,
 });
+
+export const ColorPatternInput = ({ inputColor, setInputColor, inputPattern, setInputPattern }) => {
+  return (
+    <Box
+      style={{
+        display: "flex",
+        gap: "16px",
+        width: "100%",
+        justifyContent: "center",
+      }}
+    >
+      <FormControl size="small" sx={{ minWidth: 120 }}>
+        <InputLabel id="input-color"> Color </InputLabel>
+        <Select
+          labelId="input-color"
+          id="input-color-select"
+          value={inputColor}
+          label="color"
+          onChange={(e) => setInputColor(e.target.value)}
+        >
+          {countertop_color.map((color, _) => (
+            <MenuItem key={color} value={color}>
+              {color}
+            </MenuItem>
+          ))}
+          <MenuItem value="">Clear Selection</MenuItem>
+        </Select>
+      </FormControl>
+
+      <FormControl size="small" sx={{ minWidth: 120 }}>
+        <InputLabel id="input-pattern"> Pattern </InputLabel>
+        <Select
+          labelId="input-pattern"
+          id="input-pattern-select"
+          value={inputPattern}
+          label="pattern"
+          onChange={(e) => setInputPattern(e.target.value)}
+        >
+          {countertop_pattern.map((pattern, _) => (
+            <MenuItem key={pattern} value={pattern}>
+              {pattern}
+            </MenuItem>
+          ))}
+          <MenuItem value="">Clear Selection</MenuItem>
+        </Select>
+      </FormControl>
+    </Box>
+  );
+};
 
 const ColorPatternBased = () => {
   const [inputColor, setInputColor] = useState("");
@@ -121,7 +172,12 @@ const ColorPatternBased = () => {
         </div>
 
         <div
-          style={{ display: "flex", flexDirection: "column", alignItems: "end", maxWidth: "30%" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "end",
+            maxWidth: "30%",
+          }}
         >
           <Button
             component="label"
